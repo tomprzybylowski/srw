@@ -82,6 +82,21 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
     border-color: #f5c6c1;
     color: #7a0b0b;
   }
+
+  .panel-fab {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 60;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    background: #ffffff;
+    border: 1px solid #cfd8e3;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    cursor: pointer;
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -91,7 +106,10 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 <div class="controls">
   <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px;">
     <h3 style="margin:0; line-height:1.02; font-size:20px; font-weight:700;">Simple Random Walk Simulation</h3>
-    <button id="aboutBtn">About</button>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="aboutBtn">About</button>
+      <button id="togglePanelBtn" class="big-btn" style="padding:8px 10px; font-size:13px;">Hide Panel</button>
+    </div>
   </div>
 
   <div style="margin-bottom:16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
@@ -503,7 +521,11 @@ function initGraph(graph) {
   window.addEventListener("resize", () => {
     const w = window.innerWidth, h = window.innerHeight;
     svg.attr("width", w).attr("height", h);
-    simulation.force("center", d3.forceCenter((w + 360) / 2, h/2).strength(+centeringStrength.value));
+    // center differently depending on whether the left controls panel is visible
+    const controlsEl = document.querySelector('.controls');
+    const panelShown = controlsEl && controlsEl.style.display !== 'none';
+    const centerX = panelShown ? ((w + 360) / 2) : (w / 2);
+    simulation.force("center", d3.forceCenter(centerX, h/2).strength(+centeringStrength.value));
     simulation.alpha(0.3).restart();
   });
 }
@@ -521,6 +543,44 @@ window.addEventListener('load', () => {
 const aboutBtn = document.getElementById('aboutBtn');
 const aboutModal = document.getElementById('aboutModal');
 const closeModal = document.querySelector('.modal-close');
+
+// Panel toggle (hide/show) for mobile friendliness
+const togglePanelBtn = document.getElementById('togglePanelBtn');
+// create a small floating FAB to re-open the panel when hidden
+let panelFab = document.getElementById('panelFab');
+if (!panelFab) {
+  panelFab = document.createElement('button');
+  panelFab.id = 'panelFab';
+  panelFab.className = 'panel-fab';
+  panelFab.textContent = 'Show Panel';
+  document.body.appendChild(panelFab);
+}
+
+function setPanelHidden(hidden) {
+  const controlsEl = document.querySelector('.controls');
+  if (!controlsEl) return;
+  if (hidden) {
+    controlsEl.style.display = 'none';
+    panelFab.style.display = 'block';
+    if (togglePanelBtn) togglePanelBtn.textContent = 'Show Panel';
+  } else {
+    controlsEl.style.display = '';
+    panelFab.style.display = 'none';
+    if (togglePanelBtn) togglePanelBtn.textContent = 'Hide Panel';
+  }
+
+  // update simulation centering to use full width when panel hidden
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const centerX = hidden ? (w / 2) : ((w + 360) / 2);
+  if (simulation && simulation.force) {
+    simulation.force('center', d3.forceCenter(centerX, h/2).strength(+centeringStrength.value));
+    simulation.alpha(0.3).restart();
+  }
+}
+
+if (togglePanelBtn) togglePanelBtn.addEventListener('click', () => setPanelHidden(true));
+panelFab.addEventListener('click', () => setPanelHidden(false));
 
 if (aboutBtn) {
   aboutBtn.addEventListener('click', () => {
