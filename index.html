@@ -1,0 +1,848 @@
+<!doctype html>
+<!--
+SRW Simulation - Simple Random Walk Visualization
+MIT License
+
+Copyright (c) 2026
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SRW Simulation</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+  #chart { width:100vw; height:100vh; }
+  .controls {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    width: 360px;
+    max-height: 95vh;
+    overflow-y: auto;
+    background: rgba(255,255,255,0.97);
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    font-size: 13px;
+    z-index: 20;
+  }
+  .controls h3 { margin: 6px 0; font-size: 15px; }
+  .controls label { display:block; margin-top:8px; }
+  .controls input[type="range"] { width:100%; }
+  .small { font-size:12px; color:#444; margin-top:6px; }
+  #meta { font-size: 13px; color: #333; margin-top: 10px; }
+  .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+  .modal-content { background: #fff; margin: 10% auto; padding: 20px; border-radius: 8px; width: 70%; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+  .modal-close { color: #999; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+  .modal-close:hover { color: #000; }
+  #aboutBtn { margin-left: 8px; padding: 6px 12px; font-size: 13px; background: #d4e8f7; border: 1px solid #a8d4f7; border-radius: 4px; cursor: pointer; }
+  .tooltip {
+    position:absolute;
+    pointer-events:none;
+    background:rgba(0,0,0,0.8);
+    color:#fff;
+    padding:6px 8px;
+    border-radius:4px;
+    font-size:12px;
+  }
+  .row { display:flex; gap:8px; align-items:center; margin-top:8px; }
+  .row > * { flex: 1; }
+  .big-btn {
+    transform: none;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 15px;
+    background: #e6f7ea; /* soft green */
+    border: 1px solid #bfe5c8;
+    color: #064022;
+    cursor: pointer;
+    transition: background 160ms, border-color 160ms, color 160ms, transform 120ms;
+  }
+
+  .big-btn:hover { background: #d3f0d6; }
+
+  /* When untangle is running we show the button in a muted red to indicate Stop */
+  .big-btn.running {
+    background: #fdecea;
+    border-color: #f5c6c1;
+    color: #7a0b0b;
+  }
+</style>
+</head>
+<body>
+
+<div id="chart"></div>
+
+<div class="controls">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:10px;">
+    <h3 style="margin:0; line-height:1.02; font-size:20px; font-weight:700;">Simple Random Walk Simulation</h3>
+    <button id="aboutBtn">About</button>
+  </div>
+
+  <div style="margin-bottom:16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+    <button id="generate" class="big-btn">Generate Simulation</button>
+    <button id="untangleToggle" class="big-btn">Start Untangling</button>
+  </div>
+  <label>Steps (50-5000)
+    <input type="number" id="genSteps" min="50" max="5000" value="100">
+  </label>
+  <label>Dimension (2-10)
+    <input type="number" id="genDim" min="2" max="10" value="4">
+  </label>
+  <label>Random seed (empty = random)
+    <input type="number" id="genSeed" placeholder="e.g. 42">
+  </label>
+  <div id="meta">Current simulation: Steps: 0 · Sites visited: 0</div>
+
+  <h3 style="margin-top:12px;">Physics Controls</h3>
+  <label>Link Distance <span id="linkDistanceVal" class="small"></span>
+    <input type="range" id="linkDistance" min="10" max="300" value="50">
+  </label>
+
+  <label>Link Strength <span id="linkStrengthVal" class="small"></span>
+    <input type="range" id="linkStrength" min="0" max="2" step="0.01" value="0.3">
+  </label>
+
+  <label>Charge Strength <span id="chargeStrengthVal" class="small"></span>
+    <input type="range" id="chargeStrength" min="-200" max="0" value="-30">
+  </label>
+
+  <label>Collision Radius Multiplier <span id="collisionRadiusVal" class="small"></span>
+    <input type="range" id="collisionRadius" min="1" max="20" step="0.5" value="5">
+  </label>
+
+  <label>Centering Strength <span id="centeringStrengthVal" class="small"></span>
+    <input type="range" id="centeringStrength" min="0" max="1" step="0.01" value="1">
+  </label>
+
+  <label>Velocity Decay <span id="velocityDecayVal" class="small"></span>
+    <input type="range" id="velocityDecay" min="0" max="1" step="0.01" value="0.4">
+  </label>
+
+  <h3>Visuals</h3>
+  <label>Node Size Multiplier <span id="nodeSizeVal" class="small"></span>
+    <input type="range" id="nodeSize" min="0.2" max="50" step="0.05" value="1.0">
+  </label>
+
+  <label>Edge Width Multiplier <span id="edgeWidthVal" class="small"></span>
+    <input type="range" id="edgeWidth" min="0.1" max="50" step="0.05" value="1.0">
+  </label>
+
+  <div style="margin-top:8px;">
+    <label style="margin-left:8px;">Show labels <input type="checkbox" id="labels" unchecked></label>
+  </div>
+  <div style="margin-top:6px;">
+    <label style="margin-left:8px;">Show Start and End <input type="checkbox" id="showStartEnd"></label>
+  </div>
+  
+  <h3>Save / Load Positions</h3>
+  <div class="row">
+    <button id="savePos">Save Graph</button>
+    <input type="file" id="fileInput" accept=".json">
+  </div>
+  <div class="row" style="margin-top:6px;">
+    <label style="display:flex; align-items:center;">
+      <input type="checkbox" id="lockOnLoad" checked style="margin-right:6px;"> Lock loaded positions
+    </label>
+    <button id="applyFile">Apply loaded file</button>
+  </div>
+  <div id="positionsMsg" class="small"></div>
+
+</div>
+
+<!-- About Modal -->
+<div id="aboutModal" class="modal">
+  <div class="modal-content">
+    <span class="modal-close">&times;</span>
+    <h2>About This Simulation</h2>
+    <p>
+      This tool visualizes the trace graph of the simple random walk on a d-dimensional integer lattice.
+      Imagine that a random walker paints every edge they traverse when performing the walk.
+      The visualization here takes all these painted edges and shows them on screen disregarding their position, but preserving the adjacency structure.
+    </p>
+    <p>
+        The resulting graph can be very large. Nevertheless, we expect it to be line-alike (at least in dimensions > 4).
+        In order to present it more nicely than just a giant blob of edges we induce physical behaviour on it, which you can adjust in the panel.
+        The Untangle button might be helpful as well! 
+    </p>
+    <p>
+        Created by Tomasz Przybyłowski, Feb 2026. Released under the MIT License.
+    </p>
+  </div>
+</div>
+
+<div id="tooltip" class="tooltip" style="display:none;"></div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+/* index.html with Save/Load positions support.
+   - Save button downloads current node positions as a JSON file.
+   - File input accepts a positions JSON file; "Apply loaded file" applies it to the nodes.
+   - "Lock loaded positions" controls whether loaded positions set fx/fy (locked) or x/y only (free).
+   Notes: Serve over HTTP; file:// fetch won't work in many browsers.
+*/
+
+const width = window.innerWidth;
+const height = window.innerHeight;
+
+const svg = d3.select("#chart").append("svg")
+  .attr("width", width)
+  .attr("height", height);
+
+const container = svg.append("g");
+const tooltip = d3.select("#tooltip");
+
+let simulation;
+let linkSel, nodeSel, labelSel;
+let graphData;
+let startId = null, endId = null;
+const showStartEndCheckbox = document.getElementById('showStartEnd');
+
+// Control elements
+const linkDistance = document.getElementById("linkDistance");
+const linkStrength = document.getElementById("linkStrength");
+const chargeStrength = document.getElementById("chargeStrength");
+const collisionRadius = document.getElementById("collisionRadius");
+const centeringStrength = document.getElementById("centeringStrength");
+const velocityDecay = document.getElementById("velocityDecay");
+const nodeSize = document.getElementById("nodeSize");
+const edgeWidth = document.getElementById("edgeWidth");
+const labelsCheckbox = document.getElementById("labels");
+const fileInput = document.getElementById("fileInput");
+const savePosBtn = document.getElementById("savePos");
+const applyFileBtn = document.getElementById("applyFile");
+const lockOnLoadCheckbox = document.getElementById("lockOnLoad");
+const positionsMsg = document.getElementById("positionsMsg");
+
+const controlIds = ["linkDistance","linkStrength","chargeStrength","collisionRadius","centeringStrength","velocityDecay","nodeSize","edgeWidth"];
+function setControlDisplays(){
+  document.getElementById("linkDistanceVal").innerText = linkDistance.value;
+  document.getElementById("linkStrengthVal").innerText = linkStrength.value;
+  document.getElementById("chargeStrengthVal").innerText = chargeStrength.value;
+  document.getElementById("collisionRadiusVal").innerText = collisionRadius.value;
+  document.getElementById("centeringStrengthVal").innerText = centeringStrength.value;
+  document.getElementById("velocityDecayVal").innerText = velocityDecay.value;
+  document.getElementById("nodeSizeVal").innerText = nodeSize.value;
+  document.getElementById("edgeWidthVal").innerText = edgeWidth.value;
+}
+setControlDisplays();
+
+function showTooltip(ev, d){
+  tooltip.style("display","block")
+    .html(`<strong>id:</strong> ${d.id}<br/><strong>coord:</strong> ${d.label}<br/><strong>visits:</strong> ${d.count}`);
+  moveTooltip(ev);
+}
+function moveTooltip(ev){
+  tooltip.style("left",(ev.pageX+10)+"px").style("top",(ev.pageY+10)+"px");
+}
+function hideTooltip(){ tooltip.style("display","none"); }
+
+// initialize graph from fetched file or generated data
+function initGraph(graph) {
+  graphData = graph;
+  document.getElementById("meta").innerText =
+    `Current simulation: Steps: ${graph.meta.steps} · Sites visited: ${graph.meta.unique_sites}`;
+
+  // remove previous elements if any
+  container.selectAll(".link").remove();
+  container.selectAll(".node").remove();
+  container.selectAll(".label").remove();
+
+  // create elements
+  linkSel = container.selectAll(".link")
+    .data(graph.links)
+    .enter().append("line")
+      .attr("class", "link")
+      .attr("stroke", "#999");
+
+  nodeSel = container.selectAll(".node")
+    .data(graph.nodes)
+    .enter().append("circle")
+      .attr("class", "node")
+      .attr("fill", "#69b3a2")
+      .on("mouseover", (event,d) => showTooltip(event,d))
+      .on("mousemove", (event) => moveTooltip(event))
+      .on("mouseout", hideTooltip);
+
+  labelSel = container.selectAll(".label")
+    .data(graph.nodes)
+    .enter().append("text")
+      .attr("class", "label")
+      .attr("font-size", 10)
+      .attr("dy", "0.35em")
+      .text(d => d.id)
+      .style("pointer-events", "none");
+
+  // initial visual update (sizes & widths)
+  applySizeAndEdgeWidth();
+
+  // simulation
+  simulation = d3.forceSimulation(graph.nodes)
+    .force("link", d3.forceLink(graph.links)
+      .id(d => d.id)
+      .distance(+linkDistance.value)
+      .strength(+linkStrength.value))
+    .force("charge", d3.forceManyBody().strength(+chargeStrength.value))
+    .force("center", d3.forceCenter((width + 360) / 2, height/2).strength(+centeringStrength.value))
+    .force("collision", d3.forceCollide().radius(+collisionRadius.value))
+    .velocityDecay(+velocityDecay.value)
+    .on("tick", ticked);
+
+  // attach drag behavior
+  nodeSel.call(drag(simulation));
+
+  // initial labels visibility
+  labelSel.style("display", labelsCheckbox.checked ? "block" : "none");
+
+  // determine start/end IDs from graph meta if available, else fallback
+  if (graph && graph.meta && graph.meta.start && graph.meta.end) {
+    startId = graph.meta.start;
+    endId = graph.meta.end;
+  } else if (graph && Array.isArray(graph.nodes) && graph.nodes.length > 0) {
+    startId = graph.nodes[0].id;
+    endId = graph.nodes[graph.nodes.length-1].id;
+  } else {
+    startId = endId = null;
+  }
+
+  // wire Show Start/End checkbox
+  if (showStartEndCheckbox) {
+    showStartEndCheckbox.addEventListener('change', () => {
+      applySizeAndEdgeWidth();
+    });
+  }
+
+  // wire control listeners
+  // Controls that affect physics
+  const controls = [linkDistance, linkStrength, chargeStrength, collisionRadius, centeringStrength, velocityDecay];
+  controls.forEach(control => control.addEventListener('input', onControlChange));
+
+  // Visual-only controls: update visuals only (no physics changes)
+  nodeSize.addEventListener('input', () => { setControlDisplays(); applySizeAndEdgeWidth(); });
+  edgeWidth.addEventListener('input', () => { setControlDisplays(); applySizeAndEdgeWidth(); });
+
+  labelsCheckbox.addEventListener('change', () => {
+    labelSel.style("display", labelsCheckbox.checked ? "block" : "none");
+  });
+
+  // Restart button removed from UI.
+
+  // Save graph (full architecture)
+  savePosBtn.addEventListener('click', () => {
+    if (!graphData) return;
+    // Save full graph: nodes (with positions), links, metadata, and current control settings
+    const out = {
+      meta: { ...graphData.meta, source: "z4-rw", saved_at: (new Date()).toISOString() },
+      nodes: graphData.nodes.map(n => ({ 
+        id: n.id, 
+        label: n.label, 
+        coord: n.coord, 
+        count: n.count,
+        x: n.x || null,
+        y: n.y || null,
+        vx: n.vx || 0,
+        vy: n.vy || 0
+      })),
+      links: graphData.links,
+      // Save current control settings
+      controls: {
+        linkDistance: parseFloat(linkDistance.value),
+        linkStrength: parseFloat(linkStrength.value),
+        chargeStrength: parseFloat(chargeStrength.value),
+        collisionRadius: parseFloat(collisionRadius.value),
+        centeringStrength: parseFloat(centeringStrength.value),
+        velocityDecay: parseFloat(velocityDecay.value),
+        nodeSize: parseFloat(nodeSize.value),
+        edgeWidth: parseFloat(edgeWidth.value),
+        showLabels: labelsCheckbox.checked,
+        showStartEnd: showStartEndCheckbox.checked
+      }
+    };
+    const blob = new Blob([JSON.stringify(out, null, 2)], {type: "application/json"});
+    const name = `graph_${(new Date()).toISOString().replace(/[:.]/g,'-')}.json`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    positionsMsg.innerText = `Saved graph with ${graphData.nodes.length} nodes to ${name}`;
+    setTimeout(()=> positionsMsg.innerText = "", 4000);
+  });
+
+  // File input handling (reads but does not apply until "Apply loaded file" clicked)
+  let loadedObj = null;
+  fileInput.addEventListener('change', (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) {
+      positionsMsg.innerText = 'No file selected';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        // Detect file type: full graph or positions only
+        if (parsed && Array.isArray(parsed.nodes) && Array.isArray(parsed.links)) {
+          // Full graph file
+          loadedObj = { type: 'graph', data: parsed };
+          positionsMsg.innerText = `Loaded graph: ${parsed.nodes.length} nodes, ${parsed.links.length} links — click "Apply loaded file"`;
+        } else if (parsed && Array.isArray(parsed.positions)) {
+          // Positions-only file
+          loadedObj = { type: 'positions', data: parsed };
+          positionsMsg.innerText = `Loaded file: ${f.name} (${parsed.positions.length} positions) — click "Apply loaded file"`;
+        } else {
+          positionsMsg.innerText = 'Invalid file: must contain either (nodes & links) or (positions array)';
+          loadedObj = null;
+        }
+      } catch (err) {
+        positionsMsg.innerText = 'Error parsing JSON: ' + err.message;
+        loadedObj = null;
+      }
+    };
+    reader.onerror = () => {
+      positionsMsg.innerText = 'Error reading file';
+      loadedObj = null;
+    };
+    reader.readAsText(f);
+  });
+
+  // Apply loaded file to nodes or reload full graph
+  applyFileBtn.addEventListener('click', () => {
+    if (!loadedObj) {
+      positionsMsg.innerText = 'No loaded file. Use the file input above.';
+      return;
+    }
+    
+    if (loadedObj.type === 'graph') {
+      // Full graph: reinitialize with the loaded graph data
+      const loadedGraph = loadedObj.data;
+      
+      // Ensure nodes have numeric positions
+      if (Array.isArray(loadedGraph.nodes)) {
+        for (const node of loadedGraph.nodes) {
+          if (typeof node.x === 'number') node.x = parseFloat(node.x);
+          if (typeof node.y === 'number') node.y = parseFloat(node.y);
+          if (typeof node.vx === 'number') node.vx = parseFloat(node.vx);
+          if (typeof node.vy === 'number') node.vy = parseFloat(node.vy);
+        }
+      }
+      
+      // Ensure links have source and target as IDs (for proper D3 link resolution)
+      if (Array.isArray(loadedGraph.links)) {
+        for (const link of loadedGraph.links) {
+          // If source/target are objects, convert to IDs; if strings, keep as-is
+          if (typeof link.source === 'object' && link.source !== null) {
+            link.source = link.source.id || link.source;
+          }
+          if (typeof link.target === 'object' && link.target !== null) {
+            link.target = link.target.id || link.target;
+          }
+        }
+      }
+      
+      initGraph(loadedGraph);
+      
+      // Restore control settings if available
+      if (loadedGraph.controls) {
+        const ctrl = loadedGraph.controls;
+        if (typeof ctrl.linkDistance === 'number') linkDistance.value = ctrl.linkDistance;
+        if (typeof ctrl.linkStrength === 'number') linkStrength.value = ctrl.linkStrength;
+        if (typeof ctrl.chargeStrength === 'number') chargeStrength.value = ctrl.chargeStrength;
+        if (typeof ctrl.collisionRadius === 'number') collisionRadius.value = ctrl.collisionRadius;
+        if (typeof ctrl.centeringStrength === 'number') centeringStrength.value = ctrl.centeringStrength;
+        if (typeof ctrl.velocityDecay === 'number') velocityDecay.value = ctrl.velocityDecay;
+        if (typeof ctrl.nodeSize === 'number') nodeSize.value = ctrl.nodeSize;
+        if (typeof ctrl.edgeWidth === 'number') edgeWidth.value = ctrl.edgeWidth;
+        if (typeof ctrl.showLabels === 'boolean') labelsCheckbox.checked = ctrl.showLabels;
+        if (typeof ctrl.showStartEnd === 'boolean') showStartEndCheckbox.checked = ctrl.showStartEnd;
+        // Update displays and apply changes
+        setControlDisplays();
+        applySizeAndEdgeWidth();
+        onControlChange();
+        // Update label and start/end visibility
+        if (labelSel) labelSel.style("display", labelsCheckbox.checked ? "block" : "none");
+      }
+      
+      positionsMsg.innerText = `Loaded and applied graph with ${loadedGraph.nodes.length} nodes`;
+    } else if (loadedObj.type === 'positions') {
+      // Positions only: apply to current nodes
+      const lock = lockOnLoadCheckbox.checked;
+      const applied = applyPositionsToNodes(loadedObj.data.positions, lock);
+      // Update metadata display to reflect current state
+      document.getElementById("meta").innerText =
+        `Current simulation: Steps: ${graphData.meta.steps} · Sites visited: ${graphData.meta.unique_sites}`;
+      positionsMsg.innerText = `Applied ${applied} positions (lock=${lock})`;
+    }
+    setTimeout(()=> positionsMsg.innerText = "", 4000);
+  });
+
+  // zoom/pan
+  svg.call(d3.zoom().on("zoom", (ev) => {
+    container.attr("transform", ev.transform);
+  }));
+
+  // window resize handling
+  window.addEventListener("resize", () => {
+    const w = window.innerWidth, h = window.innerHeight;
+    svg.attr("width", w).attr("height", h);
+    simulation.force("center", d3.forceCenter((w + 360) / 2, h/2).strength(+centeringStrength.value));
+    simulation.alpha(0.3).restart();
+  });
+}
+
+// Generate default graph on startup instead of fetching
+window.addEventListener('load', () => {
+  const steps = 100;
+  const dim = 3;
+  const seed = Math.floor(Math.random() * 2**31);
+  const generated = generateGraphInBrowser(steps, dim, seed);
+  initGraph(generated);
+});
+
+// About button modal handler
+const aboutBtn = document.getElementById('aboutBtn');
+const aboutModal = document.getElementById('aboutModal');
+const closeModal = document.querySelector('.modal-close');
+
+if (aboutBtn) {
+  aboutBtn.addEventListener('click', () => {
+    aboutModal.style.display = 'block';
+  });
+}
+
+if (closeModal) {
+  closeModal.addEventListener('click', () => {
+    aboutModal.style.display = 'none';
+  });
+}
+
+window.addEventListener('click', (event) => {
+  if (event.target === aboutModal) {
+    aboutModal.style.display = 'none';
+  }
+});
+
+// Wire generate button to produce a new graph in-browser
+document.getElementById('generate').addEventListener('click', () => {
+  const steps = Math.min(5000, Math.max(50, parseInt(document.getElementById('genSteps').value || 1000)));
+  const dim = Math.min(10, Math.max(2, parseInt(document.getElementById('genDim').value || 4)));
+  const seedInput = document.getElementById('genSeed').value;
+  const seed = seedInput === '' ? Math.floor(Math.random()*2**31) : parseInt(seedInput);
+  const generated = generateGraphInBrowser(steps, dim, seed);
+  initGraph(generated);
+});
+
+// PRNG (deterministic) - mulberry32
+function mulberry32(a) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+// Generate random walk graph in-browser
+function generateGraphInBrowser(steps, dim, seed) {
+  const rng = mulberry32(seed >>> 0);
+  // moves: +/- unit along each axis
+  const moves = [];
+  for (let i=0;i<dim;i++) { const m = new Array(dim).fill(0); m[i]=1; moves.push(m); const m2 = new Array(dim).fill(0); m2[i]=-1; moves.push(m2); }
+
+  const posKey = p => p.join(',');
+  let pos = new Array(dim).fill(0);
+  const startPosKey = posKey(pos);
+  const visit = new Map();
+  const transitions = new Map();
+
+  function incVisit(p) { const k=posKey(p); visit.set(k,(visit.get(k)||0)+1); }
+  incVisit(pos);
+  for (let i=0;i<steps;i++) {
+    const mv = moves[Math.floor(rng()*moves.length)];
+    const next = pos.slice();
+    for (let d=0;d<dim;d++) next[d]+=mv[d];
+    const a=posKey(pos), b=posKey(next);
+    const key = a+'|'+b;
+    transitions.set(key,(transitions.get(key)||0)+1);
+    incVisit(next);
+    pos = next;
+  }
+  const endPosKey = posKey(pos);
+  // create node list from visit map
+  const nodes = [];
+  const idMap = new Map();
+  let idx=0;
+  for (const [k,c] of visit.entries()) {
+    idMap.set(k,k);
+    nodes.push({id:k,label:k,coord:k.split(',').map(x=>parseInt(x)),count:c});
+  }
+
+  // build undirected links aggregated
+  const linkWeights = new Map();
+  for (const [k,w] of transitions.entries()) {
+    const [a,b] = k.split('|');
+    if (!idMap.has(a) || !idMap.has(b) || a===b) continue;
+    const key = a < b ? a+'|'+b : b+'|'+a;
+    linkWeights.set(key,(linkWeights.get(key)||0)+w);
+  }
+  const links = [];
+  for (const [k,w] of linkWeights.entries()) {
+    const [a,b] = k.split('|');
+    links.push({source: a, target: b, weight: w});
+  }
+
+  const meta = {steps: steps, unique_sites: visit.size, shown_nodes: nodes.length, start: startPosKey, end: endPosKey};
+  return {nodes: nodes, links: links, meta: meta};
+}
+
+// Update simulation & visuals when a control changes
+function onControlChange(){
+  setControlDisplays();
+
+  if (!simulation) return;
+
+  // update simulation forces
+  const linkForce = simulation.force("link");
+  if (linkForce) {
+    linkForce.distance(+linkDistance.value).strength(+linkStrength.value);
+  }
+  const chargeForce = simulation.force("charge");
+  if (chargeForce) chargeForce.strength(+chargeStrength.value);
+
+  const collideForce = simulation.force("collision");
+  if (collideForce) collideForce.radius(+collisionRadius.value);
+
+  const centerForce = simulation.force("center");
+  if (centerForce) centerForce.strength(+centeringStrength.value);
+
+  simulation.velocityDecay(+velocityDecay.value);
+
+  // apply node size and edge width changes visually
+  applySizeAndEdgeWidth();
+
+  simulation.alpha(1).restart();
+}
+
+// apply Node Size Multiplier and Edge Width Multiplier to the DOM elements
+function applySizeAndEdgeWidth(){
+  if (!nodeSel || !linkSel || !graphData) return;
+
+  const sizeMult = parseFloat(nodeSize.value);
+    nodeSel.attr("r", d => {
+      const base = 3 + Math.sqrt(d.count || 1);
+      const isEndpoint = (showStartEndCheckbox && showStartEndCheckbox.checked) && (d.id === startId || d.id === endId);
+      return Math.max(1, base * sizeMult * (isEndpoint ? 5 : 1));
+    });
+
+    // color endpoints bright red when enabled, otherwise default
+    nodeSel.attr("fill", d => {
+      const isEndpoint = (showStartEndCheckbox && showStartEndCheckbox.checked) && (d.id === startId || d.id === endId);
+      return isEndpoint ? '#ff3333' : '#69b3a2';
+    });
+
+    const edgeMult = parseFloat(edgeWidth.value);
+    linkSel.attr("stroke-width", d => {
+      const base = Math.max(1, Math.log2((d.weight || 0) + 1));
+      return Math.max(0.2, base * edgeMult);
+    });
+}
+
+// Apply positions array (from loaded file) to nodes; if lock=true sets fx/fy, else sets x/y and clears fx/fy
+function applyPositionsToNodes(positionsArray, lock) {
+  if (!graphData || !graphData.nodes) return 0;
+  // Build map id -> {x,y}
+  const posMap = new Map();
+  for (const p of positionsArray) {
+    if (p && (p.id !== undefined) && typeof p.x === 'number' && typeof p.y === 'number') {
+      posMap.set(p.id, {x: p.x, y: p.y});
+    }
+  }
+  // Apply to nodes; match by id
+  let applied = 0;
+  for (const node of graphData.nodes) {
+    const match = posMap.get(node.id);
+    if (match) {
+      // Set both internal node object and actual DOM-binding data
+      node.x = match.x;
+      node.y = match.y;
+      if (lock) {
+        node.fx = match.x;
+        node.fy = match.y;
+      } else {
+        node.fx = null;
+        node.fy = null;
+      }
+      applied++;
+    }
+  }
+  // Update visuals immediately by directly calling ticked to sync all DOM elements
+  if (nodeSel) {
+    nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
+  }
+  if (labelSel) {
+    labelSel.attr('x', d => d.x + 6).attr('y', d => d.y);
+  }
+  if (linkSel) {
+    linkSel
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
+  }
+  // Restart simulation with small alpha to allow subtle relaxation if positions not locked
+  if (simulation) {
+    simulation.alpha(0.3).restart();
+  }
+  return applied;
+}
+
+// Drag helpers
+function drag(sim) {
+  function dragstarted(event, d) {
+    if (!event.active) sim.alphaTarget(0.3).restart();
+    d.fx = d.x;
+    d.fy = d.y;
+  }
+  function dragged(event, d) {
+    d.fx = event.x;
+    d.fy = event.y;
+  }
+  function dragended(event, d) {
+    if (!event.active) sim.alphaTarget(0);
+    // Keep nodes fixed after drag? we release fx,fy so nodes remain free:
+    d.fx = null;
+    d.fy = null;
+  }
+  return d3.drag()
+    .on("start", dragstarted)
+    .on("drag", dragged)
+    .on("end", dragended);
+}
+
+// tick handler
+function ticked() {
+  if (!linkSel || !nodeSel || !labelSel) return;
+  linkSel
+    .attr("x1", d => d.source.x)
+    .attr("y1", d => d.source.y)
+    .attr("x2", d => d.target.x)
+    .attr("y2", d => d.target.y);
+
+  nodeSel
+    .attr("cx", d => d.x)
+    .attr("cy", d => d.y);
+
+  labelSel
+    .attr("x", d => d.x + 6)
+    .attr("y", d => d.y);
+}
+
+// Expose ticked globally because simulation callback references it when constructed inside the fetch promise
+window.ticked = ticked;
+
+</script>
+
+<script>
+// Continuous untangle toggle: Start/Stop button alternates link strength between 0.3 and 1.2
+// repeatedly; each switch waits up to 2000 ticks or 1 second. Clicking the button stops the loop.
+(function(){
+  const btn = document.getElementById('untangleToggle');
+  let running = false;
+  let currentHigh = false; // track current state; will toggle each iteration
+
+  function setLinkStrength(val) {
+    const lf = simulation && simulation.force ? simulation.force('link') : null;
+    try {
+      if (lf && typeof lf.strength === 'function') {
+        lf.strength(val);
+      } else if (simulation) {
+        // recreate link force using current links
+        simulation.force('link', d3.forceLink(graphData.links).id(d => d.id).distance(+linkDistance.value).strength(val));
+      }
+    } catch (e) {
+      console.warn('setLinkStrength failed', e);
+    }
+  }
+
+  async function waitTicksOrTime() {
+    if (!simulation) return;
+    return new Promise(resolve => {
+      let ticks = 0;
+      const start = (performance && performance.now) ? performance.now() : Date.now();
+
+      function onTick() {
+        ticks++;
+        if (ticks >= 2000 || ((performance && performance.now ? performance.now() : Date.now()) - start) >= 50) {
+          simulation.on('tick.untangleLoop', null);
+          resolve();
+        }
+      }
+
+      simulation.on('tick.untangleLoop', onTick);
+      simulation.alpha(0.3).restart();
+
+      // safety timeout
+      const to = setTimeout(() => {
+        simulation.on('tick.untangleLoop', null);
+        resolve();
+      }, 1100);
+    });
+  }
+
+  async function runLoop() {
+    while (running) {
+      const val = currentHigh ? 0.3 : 1.2; // alternate
+      currentHigh = !currentHigh;
+      // update UI
+      linkStrength.value = val;
+      document.getElementById('linkStrengthVal').innerText = val;
+      setLinkStrength(val);
+
+      // wait for ticks/time or until stopped
+      await waitTicksOrTime();
+      if (!running) break;
+      // small yield to allow UI updates
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+
+  btn.addEventListener('click', () => {
+    if (!simulation) { console.warn('Simulation not ready'); return; }
+    running = !running;
+    if (running) {
+      btn.textContent = 'Stop Untangling';
+      btn.classList.add('running');
+      // start loop
+      currentHigh = false;
+      runLoop().catch(e => { console.error('untangle loop error', e); running = false; btn.textContent = 'Start Untangling'; btn.classList.remove('running'); });
+    } else {
+      // stop
+      btn.textContent = 'Start Untangling';
+      btn.classList.remove('running');
+      simulation.on('tick.untangleLoop', null);
+      simulation.alpha(0.3).restart();
+    }
+  });
+})();
+
+</script>
+</body>
+</html>
